@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "HistoryEntry": {
+      "title": "HistoryEntry",
+      "description": "A record of a drug interaction analysis.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user ID of the person who performed the analysis."
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "The time the analysis was performed."
+        },
+        "drugs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The list of drugs analyzed."
+        },
+        "result": {
+          "type": "object",
+          "description": "The result of the analysis."
+        }
+      },
+      "required": ["uid", "timestamp", "drugs", "result"]
+    }
+  },
+  "firestore": {
+    "/history/{historyId}": {
+      "schema": "HistoryEntry",
+      "description": "Collection of drug interaction analysis history."
+    }
+  }
+}
