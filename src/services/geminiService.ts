@@ -20,6 +20,10 @@ export async function analyzeInteractions(drugs: string[]): Promise<InteractionR
   const systemInstruction = `You are a world-class clinical pharmacist and drug interaction specialist. 
   Perform a comprehensive clinical analysis of potential drug-to-drug interactions.
   
+  CRITICAL VALIDATION: Before performing the analysis, verify if each input provided is a valid medication (generic name, brand name, or common pharmaceutical compound). 
+  If any input is NOT a valid medication (e.g., random text, food items not known for drug interactions, non-medical substances), list them in the "invalidDrugs" array.
+  If there are invalid drugs, you should still attempt to analyze the valid ones if at least two valid drugs remain, but if fewer than two valid drugs remain, set severity to "None" and description to "Please enter valid drug inputs for analysis."
+  
   CRITICAL: You MUST analyze EVERY unique pair of the provided medications. 
   IMPORTANT: Use the EXACT medication names as provided in the list. Do not shorten or modify them in the "drugA" and "drugB" fields of the "interactions" array.
   
@@ -39,6 +43,7 @@ export async function analyzeInteractions(drugs: string[]): Promise<InteractionR
      - Pregnant/Lactating (e.g., teratogenicity)
      - Renally Impaired (e.g., dosage adjustments, nephrotoxicity)
   8. Critical Alerts: Urgent warnings for both patients and healthcare providers.
+  9. Invalid Drugs: List any inputs that are not recognized as valid medications.
 
   This analysis should be based on global clinical standards and apply to all medications available worldwide.
   Return the response in structured JSON format.`;
@@ -113,9 +118,14 @@ export async function analyzeInteractions(drugs: string[]): Promise<InteractionR
               type: Type.ARRAY,
               items: { type: Type.STRING },
               description: "Critical warnings that require immediate attention."
+            },
+            invalidDrugs: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of inputs that are not recognized as valid medications."
             }
           },
-          required: ["severity", "description", "interactions", "sideEffects", "problems", "alternatives", "alerts", "patientContraindications"]
+          required: ["severity", "description", "interactions", "sideEffects", "problems", "alternatives", "alerts", "patientContraindications", "invalidDrugs"]
         }
       }
     });

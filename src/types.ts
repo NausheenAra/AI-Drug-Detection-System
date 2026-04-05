@@ -21,6 +21,7 @@ export interface InteractionResult {
   problems: string[];
   alternatives: string[];
   alerts: string[];
+  invalidDrugs?: string[];
   patientContraindications?: {
     elderly: string[];
     pregnant: string[];

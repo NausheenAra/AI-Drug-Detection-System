@@ -468,6 +468,12 @@ function MainApp() {
         analyzeInteractions(drugs)
       ]);
       
+      if (aiData.invalidDrugs && aiData.invalidDrugs.length > 0) {
+        setError(`Enter a valid drug input: ${aiData.invalidDrugs.join(', ')}`);
+        setLoading(false);
+        return;
+      }
+      
       // Generate all unique combinations of drug pairs (e.g., AB, AC, BC)
       const allPairs: { drugA: string; drugB: string }[] = [];
       for (let i = 0; i < drugs.length; i++) {
@@ -574,7 +580,7 @@ function MainApp() {
           <div className="bg-blue-600 p-2 rounded-lg">
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight">Glacier Rx</span>
+          <span className="font-bold text-xl tracking-tight">Clinical AI</span>
         </div>
 
         <div className="px-4 py-2">
@@ -583,7 +589,7 @@ function MainApp() {
               <Zap className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="text-sm font-bold">Glacier AI</div>
+              <div className="text-sm font-bold">Clinical AI</div>
               <div className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Clinical Assistant</div>
             </div>
           </div>
@@ -640,29 +646,37 @@ function MainApp() {
               >
                 {/* Hero Section */}
                 <div className="space-y-4">
-                  <h2 className="text-4xl font-bold tracking-tight text-text-main">Precision Interaction Analysis</h2>
+                  <h2 className="text-4xl font-bold tracking-tight text-text-main">Clinical AI</h2>
                   <p className="text-text-muted max-w-2xl leading-relaxed">
                     Enter multiple medications or upload a patient regimen to detect contraindications, synergy, and adverse effects using real-time clinical data.
                   </p>
                 </div>
 
                 {/* Input Card */}
-                <div className="glass-card p-8 bg-linear-to-br from-bg-card to-bg-sidebar relative">
+                <div className="glass-card p-8 bg-gradient-to-br from-bg-card to-bg-sidebar relative">
                   <div className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-4">Medication Input</div>
                   <div className="flex gap-4 relative">
                     <div className="relative flex-1">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
-                        <Pill className="w-5 h-5" />
+                      <div className="relative flex items-center">
+                        <div className="absolute left-4 text-text-muted">
+                          <Pill className="w-5 h-5" />
+                        </div>
+                        <input 
+                          type="text" 
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && addDrug()}
+                          onFocus={() => input.trim().length > 1 && setShowSuggestions(true)}
+                          placeholder="e.g. Warfarin, Lisinopril, St. John's Wort..."
+                          className="w-full bg-black/5 dark:bg-black/20 border border-border-main rounded-xl py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-text-main"
+                        />
+                        <button 
+                          onClick={() => addDrug()}
+                          className="absolute right-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-xs transition-all"
+                        >
+                          Add
+                        </button>
                       </div>
-                      <input 
-                        type="text" 
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addDrug()}
-                        onFocus={() => input.trim().length > 1 && setShowSuggestions(true)}
-                        placeholder="e.g. Warfarin, Lisinopril, St. John's Wort..."
-                        className="w-full bg-black/5 dark:bg-black/20 border border-border-main rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-text-main"
-                      />
                       
                       {/* Suggestions Dropdown */}
                       <AnimatePresence>
@@ -768,7 +782,7 @@ function MainApp() {
                         className="w-full h-full object-cover opacity-30 group-hover:scale-110 transition-transform duration-700"
                         referrerPolicy="no-referrer"
                       />
-                      <div className="absolute inset-0 bg-linear-to-t from-bg-main via-transparent to-transparent p-8 flex flex-col justify-end">
+                      <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-transparent to-transparent p-8 flex flex-col justify-end">
                         <h4 className="text-2xl font-bold mb-2 text-text-main">Pharmacogenomics</h4>
                         <p className="text-sm text-text-muted">Genetic variance impact on dosage.</p>
                       </div>
@@ -934,7 +948,7 @@ function MainApp() {
 
                 {/* Summary Hero */}
                 <div className={cn(
-                  "relative overflow-hidden p-8 md:p-12 rounded-4xl border-2 flex flex-col md:flex-row items-center gap-10 shadow-2xl",
+                  "relative overflow-hidden p-8 md:p-12 rounded-[2rem] border-2 flex flex-col md:flex-row items-center gap-10 shadow-2xl",
                   result.severity.toLowerCase().includes('high') ? "bg-red-500/10 border-red-500/30 text-red-500" :
                   result.severity.toLowerCase().includes('medium') ? "bg-orange-500/10 border-orange-500/30 text-orange-500" :
                   "bg-green-500/10 border-green-500/30 text-green-500"
@@ -991,7 +1005,7 @@ function MainApp() {
                                   <div className="px-4 py-2 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main font-bold text-text-main">
                                     {inter.drugA}
                                   </div>
-                                  <div className="w-8 h-0.5 bg-border-main"></div>
+                                  <div className="w-8 h-[2px] bg-border-main"></div>
                                   <div className="px-4 py-2 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main font-bold text-text-main">
                                     {inter.drugB}
                                   </div>
@@ -1111,7 +1125,7 @@ function MainApp() {
                   <div className="lg:col-span-4 space-y-8">
                     {/* Critical Warnings */}
                     {result.alerts.length > 0 && (
-                      <section className="relative overflow-hidden bg-red-500/10 p-8 rounded-4xl border-2 border-red-500/30 space-y-6">
+                      <section className="relative overflow-hidden bg-red-500/10 p-8 rounded-[2rem] border-2 border-red-500/30 space-y-6">
                         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-64 h-64 bg-red-500 opacity-[0.05] rounded-full blur-3xl pointer-events-none"></div>
                         
                         <div className="flex items-center gap-3 relative z-10">
@@ -1134,7 +1148,7 @@ function MainApp() {
                     )}
 
                     {/* Safer Alternatives */}
-                    <section className="bg-blue-600 p-8 rounded-4xl text-white shadow-2xl shadow-blue-500/20 space-y-6 relative overflow-hidden">
+                    <section className="bg-blue-600 p-8 rounded-[2rem] text-white shadow-2xl shadow-blue-500/20 space-y-6 relative overflow-hidden">
                       <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-white opacity-[0.1] rounded-full blur-3xl pointer-events-none"></div>
                       
                       <div className="flex items-center gap-3 relative z-10">

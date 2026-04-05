@@ -1,5 +1,5 @@
 {
-  "name": "Drug-to-Drug Interaction AI System",
+  "name": "Clinical AI",
   "description": "An AI-powered system to detect drug interactions, severity, side-effects, and provide safer alternatives.",
   "requestFramePermissions": []
 }
