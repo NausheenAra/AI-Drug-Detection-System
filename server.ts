@@ -58,6 +58,11 @@ async function startServer() {
     }
   ];
 
+  const drugMap = new Map<string, typeof drugDatabase[number]>();
+  drugDatabase.forEach((drug) => {
+    drugMap.set(drug.name.toLowerCase(), drug);
+  });
+
   // API Route: Search Drugs
   app.get("/api/drugs/search", (req, res) => {
     const { q } = req.query;
@@ -80,15 +85,25 @@ async function startServer() {
     }
 
     try {
+      const uniqueDrugs = Array.from(
+        new Set(
+          drugs
+            .map((drug: string) => drug.trim())
+            .filter((drug) => drug.length > 0)
+        )
+      );
+
       const interactions: any[] = [];
-      
-      for (let i = 0; i < drugs.length; i++) {
-        for (let j = i + 1; j < drugs.length; j++) {
-          const drugA = drugs[i];
-          const drugB = drugs[j];
-          
-          const dbEntry = drugDatabase.find(d => d.name.toLowerCase() === drugA.toLowerCase());
-          const interaction = dbEntry?.interactsWith.find(inter => inter.drug.toLowerCase() === drugB.toLowerCase());
+
+      for (let i = 0; i < uniqueDrugs.length; i++) {
+        for (let j = i + 1; j < uniqueDrugs.length; j++) {
+          const drugA = uniqueDrugs[i];
+          const drugB = uniqueDrugs[j];
+
+          const dbEntry = drugMap.get(drugA.toLowerCase());
+          const interaction = dbEntry?.interactsWith.find(
+            (inter) => inter.drug.toLowerCase() === drugB.toLowerCase()
+          );
 
           if (interaction) {
             interactions.push({
@@ -96,14 +111,14 @@ async function startServer() {
               drugB,
               severity: interaction.severity,
               description: interaction.effect,
-              recommendation: interaction.recommendation
+              recommendation: interaction.recommendation,
             });
           }
         }
       }
 
       res.json({
-        interactions
+        interactions,
       });
 
     } catch (error) {

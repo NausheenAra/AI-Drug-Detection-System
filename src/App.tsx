@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
+  Sun,
+  Moon,
   Pill, 
   Plus, 
   Trash2, 
@@ -13,11 +15,7 @@ import {
   Stethoscope,
   ShieldAlert,
   Home,
-  Database,
-  FlaskConical,
   Bookmark,
-  Settings,
-  HelpCircle,
   LogOut,
   Bell,
   User,
@@ -127,11 +125,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
         message = this.state.error.message || message;
       }
       return (
-        <div className="min-h-screen bg-bg-dark flex items-center justify-center p-8">
+        <div className="min-h-screen bg-[#0A0E1A] flex items-center justify-center p-8">
           <div className="glass-card p-8 max-w-md text-center space-y-6">
             <AlertTriangle className="w-16 h-16 text-red-500 mx-auto" />
             <h2 className="text-2xl font-bold">Application Error</h2>
-            <p className="text-gray-400">{message}</p>
+            <p className="text-text-muted">{message}</p>
             <button 
               onClick={() => window.location.reload()}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-500 transition-all"
@@ -160,13 +158,28 @@ function MainApp() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'dashboard' | 'results' | 'lookup' | 'labs' | 'history'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'results' | 'history'>('dashboard');
   const [activeTab, setActiveTab] = useState('Home');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -177,8 +190,11 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthReady || !user) {
-      setHistory([]);
+    if (!isAuthReady) return;
+
+    if (!user) {
+      const localHistory = JSON.parse(localStorage.getItem('local_history') || '[]');
+      setHistory(localHistory);
       return;
     }
 
@@ -235,22 +251,38 @@ function MainApp() {
   };
 
   const saveToHistory = async (drugs: string[], result: AnalysisResult) => {
-    if (!user) return;
-    
-    const path = 'history';
-    try {
-      await addDoc(collection(db, path), {
-        uid: user.uid,
-        timestamp: Date.now(),
-        drugs,
-        result
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
+    const entry = {
+      uid: user?.uid || 'anonymous',
+      timestamp: Date.now(),
+      drugs,
+      result
+    };
+
+    if (user) {
+      const path = 'history';
+      try {
+        await addDoc(collection(db, path), entry);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      }
+    } else {
+      const localHistory = JSON.parse(localStorage.getItem('local_history') || '[]');
+      const newEntry = { id: `local_${Date.now()}`, ...entry };
+      localHistory.unshift(newEntry);
+      localStorage.setItem('local_history', JSON.stringify(localHistory.slice(0, 50)));
+      setHistory(prev => [newEntry, ...prev]);
     }
   };
 
   const deleteHistoryEntry = async (id: string) => {
+    if (id.startsWith('local_')) {
+      const localHistory = JSON.parse(localStorage.getItem('local_history') || '[]');
+      const filtered = localHistory.filter((e: any) => e.id !== id);
+      localStorage.setItem('local_history', JSON.stringify(filtered));
+      setHistory(filtered);
+      return;
+    }
+
     const path = `history/${id}`;
     try {
       await deleteDoc(doc(db, 'history', id));
@@ -260,8 +292,11 @@ function MainApp() {
   };
 
   const clearAllHistory = async () => {
-    // For simplicity, we'll delete them one by one or just inform the user
-    // Firestore doesn't have a "delete collection" on client side easily
+    if (!user) {
+      localStorage.removeItem('local_history');
+      setHistory([]);
+      return;
+    }
     for (const entry of history) {
       await deleteHistoryEntry(entry.id);
     }
@@ -322,7 +357,7 @@ function MainApp() {
     // Severity
     doc.setFontSize(14);
     doc.text('Overall Severity:', 14, 65);
-    const severityColor = result.severity.toLowerCase().includes('high') ? [239, 68, 68] : 
+    const severityColor: [number, number, number] = result.severity.toLowerCase().includes('high') ? [239, 68, 68] : 
                          result.severity.toLowerCase().includes('medium') ? [249, 115, 22] : [34, 197, 94];
     doc.setTextColor(severityColor[0], severityColor[1], severityColor[2]);
     doc.setFont('helvetica', 'bold');
@@ -350,7 +385,7 @@ function MainApp() {
         head: [['Drug A', 'Drug B', 'Severity', 'Description']],
         body: result.interactions.map(i => [i.drugA, i.drugB, i.severity, i.description]),
         theme: 'striped',
-        headStyles: { fillColor: [37, 99, 235] },
+        headStyles: { fillColor: severityColor },
         margin: { top: 10 },
       });
       
@@ -427,28 +462,97 @@ function MainApp() {
     setLoading(true);
     setError(null);
     try {
-      // 1. Get rule-based interactions from backend
-      const backendData = await analyzeDrugs(drugs);
+      // Run both rule-based and AI-powered analyses in parallel for maximum speed
+      const [backendData, aiData] = await Promise.all([
+        analyzeDrugs(drugs),
+        analyzeInteractions(drugs)
+      ]);
       
-      // 2. Get AI-powered analysis from Gemini
-      const aiData = await analyzeInteractions(drugs);
+      // Generate all unique combinations of drug pairs (e.g., AB, AC, BC)
+      const allPairs: { drugA: string; drugB: string }[] = [];
+      for (let i = 0; i < drugs.length; i++) {
+        for (let j = i + 1; j < drugs.length; j++) {
+          allPairs.push({ drugA: drugs[i], drugB: drugs[j] });
+        }
+      }
+
+      // Map results to all pairs
+      const finalInteractions = allPairs.map(pair => {
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const normA = normalize(pair.drugA);
+        const normB = normalize(pair.drugB);
+
+        // Check backend first
+        const beMatch = backendData.interactions.find((be: any) => {
+          const beNormA = normalize(be.drugA);
+          const beNormB = normalize(be.drugB);
+          return (beNormA === normA && beNormB === normB) || (beNormA === normB && beNormB === normA);
+        });
+
+        if (beMatch) {
+          return {
+            drugA: pair.drugA,
+            drugB: pair.drugB,
+            severity: beMatch.severity,
+            description: beMatch.description,
+            recommendation: beMatch.recommendation
+          };
+        }
+
+        // Check AI results with more flexible matching
+        const aiMatch = aiData.interactions.find((ai: any) => {
+          const aiNormA = normalize(ai.drugA);
+          const aiNormB = normalize(ai.drugB);
+          
+          // Check for exact normalized match or if one contains the other
+          const matchA = aiNormA === normA || normA.includes(aiNormA) || aiNormA.includes(normA);
+          const matchB = aiNormB === normB || normB.includes(aiNormB) || aiNormB.includes(normB);
+          
+          return matchA && matchB;
+        });
+
+        if (aiMatch) {
+          return {
+            ...aiMatch,
+            drugA: pair.drugA, // Ensure we use the original input name
+            drugB: pair.drugB
+          };
+        }
+
+        // Default to None
+        return {
+          drugA: pair.drugA,
+          drugB: pair.drugB,
+          severity: Severity.NONE,
+          description: "No significant interaction identified between these medications based on current clinical data.",
+          recommendation: "Continue as prescribed, but monitor for any unusual symptoms."
+        };
+      });
+
+      // Calculate overall severity from the final interactions list
+      const severityOrder = { [Severity.HIGH]: 3, [Severity.MEDIUM]: 2, [Severity.LOW]: 1, [Severity.NONE]: 0 };
       
+      // Sort interactions by severity (High to None)
+      const sortedInteractions = [...finalInteractions].sort((a, b) => {
+        return severityOrder[b.severity as Severity] - severityOrder[a.severity as Severity];
+      });
+
+      let maxSeverity = Severity.NONE;
+      sortedInteractions.forEach(inter => {
+        if (severityOrder[inter.severity as Severity] > severityOrder[maxSeverity]) {
+          maxSeverity = inter.severity as Severity;
+        }
+      });
+
       const analysisResult: AnalysisResult = {
-        severity: aiData.severity,
+        severity: maxSeverity,
         description: aiData.description,
-        interactions: [
-          ...backendData.interactions,
-          ...aiData.interactions.filter(aiInter => 
-            !backendData.interactions.some((beInter: any) => 
-              (beInter.drugA === aiInter.drugA && beInter.drugB === aiInter.drugB) ||
-              (beInter.drugA === aiInter.drugB && beInter.drugB === aiInter.drugA)
-            )
-          )
-        ],
+        interactions: sortedInteractions,
         sideEffects: aiData.sideEffects,
         alerts: aiData.alerts,
         alternatives: aiData.alternatives,
-        problems: aiData.problems
+        problems: aiData.problems,
+        patientContraindications: aiData.patientContraindications
       };
 
       setResult(analysisResult);
@@ -463,9 +567,9 @@ function MainApp() {
   };
 
   return (
-    <div className="flex min-h-screen bg-bg-dark text-gray-100 font-sans">
+    <div className="flex min-h-screen bg-bg-main text-text-main font-sans transition-colors duration-300">
       {/* Sidebar */}
-      <aside className="w-64 bg-sidebar-dark border-r border-gray-800 flex flex-col fixed h-full z-20">
+      <aside className="w-64 bg-bg-sidebar border-r border-border-main flex flex-col fixed h-full z-20 transition-colors duration-300">
         <div className="p-6 flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg">
             <Stethoscope className="w-6 h-6 text-white" />
@@ -479,8 +583,8 @@ function MainApp() {
               <Zap className="w-5 h-5 text-blue-400" />
             </div>
             <div>
-              <div className="text-sm font-bold">Clinical AI</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Clinical Assistant</div>
+              <div className="text-sm font-bold">Glacier AI</div>
+              <div className="text-[10px] text-text-muted uppercase tracking-wider font-bold">Clinical Assistant</div>
             </div>
           </div>
 
@@ -493,33 +597,11 @@ function MainApp() {
               <span className="font-medium">Home</span>
             </div>
             <div 
-              className={cn("sidebar-item", activeTab === 'Drug Lookup' && "active")}
-              onClick={() => { setActiveTab('Drug Lookup'); setView('lookup'); }}
-            >
-              <Database className="w-5 h-5" />
-              <span className="font-medium">Drug Lookup</span>
-            </div>
-            <div 
-              className={cn("sidebar-item", activeTab === 'Lab Results' && "active")}
-              onClick={() => { setActiveTab('Lab Results'); setView('labs'); }}
-            >
-              <FlaskConical className="w-5 h-5" />
-              <span className="font-medium">Lab Results</span>
-            </div>
-            <div 
               className={cn("sidebar-item", activeTab === 'History' && "active")}
               onClick={() => { setActiveTab('History'); setView('history'); }}
             >
               <Activity className="w-5 h-5" />
               <span className="font-medium">History</span>
-            </div>
-            <div className="sidebar-item">
-              <Bookmark className="w-5 h-5" />
-              <span className="font-medium">Saved Regimens</span>
-            </div>
-            <div className="sidebar-item">
-              <Settings className="w-5 h-5" />
-              <span className="font-medium">Settings</span>
             </div>
           </nav>
 
@@ -533,9 +615,9 @@ function MainApp() {
         </div>
 
         <div className="mt-auto p-4 space-y-1">
-          <div className="sidebar-item">
-            <HelpCircle className="w-5 h-5" />
-            <span className="font-medium">Support</span>
+          <div className="sidebar-item" onClick={toggleTheme}>
+            {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            <span className="font-medium">{theme === 'light' ? 'Dark Mode' : 'Light Mode'}</span>
           </div>
           <div className="sidebar-item" onClick={user ? handleLogout : handleLogin}>
             {user ? <LogOut className="w-5 h-5" /> : <User className="w-5 h-5" />}
@@ -546,43 +628,6 @@ function MainApp() {
 
       {/* Main Content */}
       <main className="flex-1 ml-64 min-h-screen">
-        {/* Top Bar */}
-        <header className="h-20 border-b border-gray-800 flex items-center justify-between px-8 bg-bg-dark/80 backdrop-blur-md sticky top-0 z-100">
-          <div className="flex items-center gap-4">
-            <div className="text-sm font-bold text-blue-400 border-b-2 border-blue-400 pb-1 px-2">Dashboard</div>
-            <div className="text-sm font-bold text-gray-500 hover:text-gray-300 transition-colors px-2">Interactions</div>
-            <div className="text-sm font-bold text-gray-500 hover:text-gray-300 transition-colors px-2">Guidelines</div>
-            <div 
-              className={cn("text-sm font-bold transition-colors px-2 cursor-pointer", view === 'history' ? "text-blue-400 border-b-2 border-blue-400 pb-1" : "text-gray-500 hover:text-gray-300")}
-              onClick={() => { setView('history'); setActiveTab('History'); }}
-            >
-              History
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input 
-                type="text" 
-                placeholder="Global search..." 
-                className="bg-gray-900 border border-gray-800 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 w-64"
-              />
-            </div>
-            <button className="text-gray-500 hover:text-white transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-bg-dark"></span>
-            </button>
-            <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center border border-gray-700 overflow-hidden">
-              {user?.photoURL ? (
-                <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <User className="w-5 h-5 text-gray-400" />
-              )}
-            </div>
-          </div>
-        </header>
-
         <div className="p-8 max-w-7xl mx-auto">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
@@ -595,18 +640,18 @@ function MainApp() {
               >
                 {/* Hero Section */}
                 <div className="space-y-4">
-                  <h2 className="text-4xl font-bold tracking-tight">Precision Interaction Analysis</h2>
-                  <p className="text-gray-400 max-w-2xl leading-relaxed">
+                  <h2 className="text-4xl font-bold tracking-tight text-text-main">Precision Interaction Analysis</h2>
+                  <p className="text-text-muted max-w-2xl leading-relaxed">
                     Enter multiple medications or upload a patient regimen to detect contraindications, synergy, and adverse effects using real-time clinical data.
                   </p>
                 </div>
 
                 {/* Input Card */}
-                <div className="glass-card p-8 bg-linear-to-br from-card-dark to-sidebar-dark relative">
+                <div className="glass-card p-8 bg-gradient-to-br from-bg-card to-bg-sidebar relative">
                   <div className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em] mb-4">Medication Input</div>
                   <div className="flex gap-4 relative">
                     <div className="relative flex-1">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted">
                         <Pill className="w-5 h-5" />
                       </div>
                       <input 
@@ -616,7 +661,7 @@ function MainApp() {
                         onKeyPress={(e) => e.key === 'Enter' && addDrug()}
                         onFocus={() => input.trim().length > 1 && setShowSuggestions(true)}
                         placeholder="e.g. Warfarin, Lisinopril, St. John's Wort..."
-                        className="w-full bg-black/20 border border-white/10 rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        className="w-full bg-black/5 dark:bg-black/20 border border-border-main rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-text-main"
                       />
                       
                       {/* Suggestions Dropdown */}
@@ -626,7 +671,7 @@ function MainApp() {
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
-                            className="absolute left-0 right-0 top-full mt-2 bg-border-dark border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                            className="absolute left-0 right-0 top-full mt-2 bg-[#1F2937] border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
                           >
                             {suggestions.map((suggestion, i) => (
                               <div 
@@ -634,7 +679,7 @@ function MainApp() {
                                 onClick={() => addDrug(suggestion)}
                                 className="px-4 py-3 hover:bg-blue-600/20 cursor-pointer transition-colors flex items-center gap-3 border-b border-gray-800 last:border-0"
                               >
-                                <Search className="w-4 h-4 text-gray-500" />
+                                <Search className="w-4 h-4 text-text-muted" />
                                 <span className="text-sm font-medium">{suggestion}</span>
                               </div>
                             ))}
@@ -682,112 +727,29 @@ function MainApp() {
                   </div>
                 </div>
 
-                {/* Grid Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* Recent Searches */}
-                  <div className="lg:col-span-8 space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-blue-400" />
-                        <h3 className="text-xl font-bold">Recent Searches</h3>
-                      </div>
-                      <button 
-                        onClick={() => { setView('history'); setActiveTab('History'); }}
-                        className="text-sm text-blue-400 hover:text-blue-300 font-medium"
-                      >
-                        View all
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {history.slice(0, 3).map((item, i) => (
-                        <div 
-                          key={item.id} 
-                          className="glass-card p-6 hover:bg-white/5 transition-all cursor-pointer group" 
-                          onClick={() => { setDrugs(item.drugs); setResult(item.result); setView('results'); }}
-                        >
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
-                              <Pill className="w-5 h-5 text-gray-400" />
-                            </div>
-                            <span className="text-[10px] text-gray-500 font-medium">{new Date(item.timestamp).toLocaleDateString()}</span>
-                          </div>
-                          <h4 className="font-bold text-lg mb-1">{item.drugs.join(' + ')}</h4>
-                          <p className="text-xs text-gray-500 mb-4 line-clamp-1">{item.result.description}</p>
-                          <div className="flex items-center gap-2">
-                            <div className={cn(
-                              "status-dot", 
-                              item.result.severity.toLowerCase().includes('high') ? "bg-red-500" :
-                              item.result.severity.toLowerCase().includes('medium') ? "bg-orange-500" : "bg-green-500"
-                            )}></div>
-                            <span className={cn(
-                              "text-[10px] font-black tracking-widest uppercase",
-                              item.result.severity.toLowerCase().includes('high') ? "text-red-500" :
-                              item.result.severity.toLowerCase().includes('medium') ? "text-orange-500" : "text-green-500"
-                            )}>
-                              {item.result.severity} RISK
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      
-                      {history.length === 0 && (
-                        <div className="glass-card p-6 border-dashed flex flex-col items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-all cursor-pointer" onClick={() => { setView('dashboard'); setInput(''); }}>
-                          <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mb-2">
-                            <Plus className="w-5 h-5" />
-                          </div>
-                          <span className="text-xs font-bold">New Interaction Check</span>
-                        </div>
-                      )}
-                    </div>
+                {/* Active Alerts */}
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-red-500" />
+                    <h3 className="text-xl font-bold">Active Alerts</h3>
                   </div>
 
-                  {/* Active Alerts */}
-                  <div className="lg:col-span-4 space-y-6">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-red-500" />
-                      <h3 className="text-xl font-bold">Active Alerts</h3>
-                    </div>
-
-                    <div className="glass-card p-6 space-y-4">
-                      {[
-                        { icon: ShieldAlert, color: "text-red-500", bg: "bg-red-500/10", title: "Critical: CYP3A4 Inhibition", desc: "Observed in Case #8829 regimen update." },
-                        { icon: Bell, color: "text-yellow-500", bg: "bg-yellow-500/10", title: "Updated: FDA Black Box", desc: "New warnings for Fluoroquinolones." },
-                        { icon: Info, color: "text-blue-500", bg: "bg-blue-500/10", title: "Guideline Update", desc: "ACC/AHA Hypertension 2024 V2." },
-                      ].map((alert, i) => (
-                        <div key={i} className="flex gap-4 p-4 rounded-xl bg-white/5 border border-white/5">
-                          <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", alert.bg)}>
-                            <alert.icon className={cn("w-5 h-5", alert.color)} />
-                          </div>
-                          <div>
-                            <div className="text-sm font-bold mb-1">{alert.title}</div>
-                            <div className="text-[11px] text-gray-500 leading-relaxed">{alert.desc}</div>
-                          </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { icon: ShieldAlert, color: "text-red-500", bg: "bg-red-500/10", title: "Critical: CYP3A4 Inhibition", desc: "Observed in Case #8829 regimen update." },
+                      { icon: Bell, color: "text-yellow-500", bg: "bg-yellow-500/10", title: "Updated: FDA Black Box", desc: "New warnings for Fluoroquinolones." },
+                      { icon: Info, color: "text-blue-500", bg: "bg-blue-500/10", title: "Guideline Update", desc: "ACC/AHA Hypertension 2024 V2." },
+                    ].map((alert, i) => (
+                      <div key={i} className="glass-card p-6 flex gap-4 items-start">
+                        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", alert.bg)}>
+                          <alert.icon className={cn("w-5 h-5", alert.color)} />
                         </div>
-                      ))}
-                      <button className="w-full py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear all resolved alerts</button>
-                    </div>
-
-                    {/* System Capacity Widget */}
-                    <div className="glass-card p-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">System Capacity</span>
-                        <span className="text-sm font-bold text-blue-400">99.9%</span>
+                        <div>
+                          <div className="text-sm font-bold mb-1">{alert.title}</div>
+                          <div className="text-[11px] text-gray-500 leading-relaxed">{alert.desc}</div>
+                        </div>
                       </div>
-                      <div className="flex items-end gap-1.5 h-16 mb-4">
-                        {[40, 60, 80, 50, 70, 90, 65, 55].map((h, i) => (
-                          <div 
-                            key={i} 
-                            className={cn(
-                              "flex-1 rounded-t-sm transition-all duration-500",
-                              i === 5 ? "bg-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.5)]" : "bg-blue-900/40"
-                            )} 
-                            style={{ height: `${h}%` }}
-                          />
-                        ))}
-                      </div>
-                      <div className="text-[10px] text-gray-500 text-center">Processing 1.4M molecular simulations/sec</div>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -806,16 +768,16 @@ function MainApp() {
                         className="w-full h-full object-cover opacity-30 group-hover:scale-110 transition-transform duration-700"
                         referrerPolicy="no-referrer"
                       />
-                      <div className="absolute inset-0 bg-linear-to-t from-bg-dark via-transparent to-transparent p-8 flex flex-col justify-end">
-                        <h4 className="text-2xl font-bold mb-2">Pharmacogenomics</h4>
-                        <p className="text-sm text-gray-400">Genetic variance impact on dosage.</p>
+                      <div className="absolute inset-0 bg-gradient-to-t from-bg-main via-transparent to-transparent p-8 flex flex-col justify-end">
+                        <h4 className="text-2xl font-bold mb-2 text-text-main">Pharmacogenomics</h4>
+                        <p className="text-sm text-text-muted">Genetic variance impact on dosage.</p>
                       </div>
                     </div>
 
                     <div className="lg:col-span-8 glass-card p-8 flex flex-col md:flex-row items-center gap-10">
                       <div className="relative w-40 h-40 shrink-0">
                         <svg className="w-full h-full" viewBox="0 0 100 100">
-                          <circle cx="50" cy="50" r="45" fill="none" stroke="#1F2937" strokeWidth="8" />
+                          <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" className="text-border-main" strokeWidth="8" />
                           <circle 
                             cx="50" cy="50" r="45" fill="none" stroke="#14B8A6" strokeWidth="8" 
                             strokeDasharray="282.7" strokeDashoffset={282.7 * (1 - 0.82)}
@@ -834,7 +796,7 @@ function MainApp() {
                           Knowledge Base Update
                         </div>
                         <h4 className="text-3xl font-bold">Artificial Intelligence V4.2 Core Deployment</h4>
-                        <p className="text-gray-400 leading-relaxed">
+                        <p className="text-text-muted leading-relaxed">
                           We've integrated the latest clinical trial data from the NEJM regarding SGLT2 inhibitors and their impact on renal interaction profiles. Accuracy for multi-drug regimen prediction has improved by 14%.
                         </p>
                         <button className="text-blue-400 hover:text-blue-300 font-bold flex items-center gap-2 transition-colors">
@@ -843,63 +805,6 @@ function MainApp() {
                       </div>
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            )}
-
-            {view === 'lookup' && (
-              <motion.div
-                key="lookup"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
-              >
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-bold tracking-tight">Clinical Drug Database</h2>
-                  <p className="text-gray-400 max-w-2xl leading-relaxed">
-                    Search our comprehensive database of over 150,000 medications, including generics, brand names, and herbal supplements.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {['Cardiology', 'Endocrinology', 'Neurology', 'Oncology', 'Pediatrics', 'Psychiatry'].map((cat) => (
-                    <div key={cat} className="glass-card p-6 hover:bg-white/5 transition-all cursor-pointer">
-                      <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
-                        <Database className="w-6 h-6 text-blue-400" />
-                      </div>
-                      <h4 className="font-bold text-lg mb-1">{cat}</h4>
-                      <p className="text-xs text-gray-500">Browse specialized medications and protocols.</p>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {view === 'labs' && (
-              <motion.div
-                key="labs"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-8"
-              >
-                <div className="space-y-4">
-                  <h2 className="text-4xl font-bold tracking-tight">Lab Result Integration</h2>
-                  <p className="text-gray-400 max-w-2xl leading-relaxed">
-                    Import patient lab data (Creatinine, Liver Enzymes, INR) to adjust interaction risk based on physiological status.
-                  </p>
-                </div>
-
-                <div className="glass-card p-12 flex flex-col items-center justify-center text-center border-dashed">
-                  <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                    <FlaskConical className="w-8 h-8 text-gray-500" />
-                  </div>
-                  <h4 className="text-xl font-bold mb-2">No Lab Data Connected</h4>
-                  <p className="text-sm text-gray-500 max-w-md mb-6">Connect to an EHR system or upload a PDF report to enable physiological risk adjustment.</p>
-                  <button className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-500 transition-all">
-                    Connect EHR
-                  </button>
                 </div>
               </motion.div>
             )}
@@ -914,8 +819,8 @@ function MainApp() {
               >
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <h2 className="text-4xl font-bold tracking-tight">Analysis History</h2>
-                    <p className="text-gray-400 max-w-2xl leading-relaxed">
+                    <h2 className="text-4xl font-bold tracking-tight text-text-main">Analysis History</h2>
+                    <p className="text-text-muted max-w-2xl leading-relaxed">
                       Review your previous drug interaction analyses and clinical reports.
                     </p>
                   </div>
@@ -944,7 +849,7 @@ function MainApp() {
                     {history.map((entry) => (
                       <div 
                         key={entry.id} 
-                        className="glass-card p-6 hover:bg-white/5 transition-all group flex flex-col md:flex-row md:items-center justify-between gap-6"
+                        className="glass-card p-6 hover:bg-black/5 dark:hover:bg-white/5 transition-all group flex flex-col md:flex-row md:items-center justify-between gap-6"
                       >
                         <div className="space-y-2 flex-1">
                           <div className="flex items-center gap-3">
@@ -953,10 +858,10 @@ function MainApp() {
                               entry.result.severity.toLowerCase().includes('high') ? "bg-red-500" :
                               entry.result.severity.toLowerCase().includes('medium') ? "bg-orange-500" : "bg-green-500"
                             )}></div>
-                            <h4 className="font-bold text-lg">{entry.drugs.join(' + ')}</h4>
-                            <span className="text-xs text-gray-500">{new Date(entry.timestamp).toLocaleString()}</span>
+                            <h4 className="font-bold text-lg text-text-main">{entry.drugs.join(' + ')}</h4>
+                            <span className="text-xs text-text-muted">{new Date(entry.timestamp).toLocaleString()}</span>
                           </div>
-                          <p className="text-sm text-gray-400 line-clamp-1">{entry.result.description}</p>
+                          <p className="text-sm text-text-muted line-clamp-1">{entry.result.description}</p>
                           <div className="flex gap-2">
                             {entry.drugs.map((d: string) => (
                               <span key={d} className="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400">{d}</span>
@@ -972,7 +877,7 @@ function MainApp() {
                           </button>
                           <button 
                             onClick={() => deleteHistoryEntry(entry.id)}
-                            className="p-2 text-gray-500 hover:text-red-400 transition-colors"
+                            className="p-2 text-text-muted hover:text-red-400 transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -983,10 +888,10 @@ function MainApp() {
                 ) : (
                   <div className="glass-card p-12 flex flex-col items-center justify-center text-center border-dashed">
                     <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                      <Activity className="w-8 h-8 text-gray-500" />
+                      <Activity className="w-8 h-8 text-text-muted" />
                     </div>
-                    <h4 className="text-xl font-bold mb-2">No History Found</h4>
-                    <p className="text-sm text-gray-500 max-w-md mb-6">You haven't performed any drug interaction analyses yet. Start a new analysis to see it here.</p>
+                    <h4 className="text-xl font-bold mb-2 text-text-main">No History Found</h4>
+                    <p className="text-sm text-text-muted max-w-md mb-6">You haven't performed any drug interaction analyses yet. Start a new analysis to see it here.</p>
                     <button 
                       onClick={() => { setView('dashboard'); setActiveTab('Home'); }}
                       className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-500 transition-all"
@@ -1010,12 +915,12 @@ function MainApp() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <button 
                     onClick={() => setView('dashboard')}
-                    className="flex items-center gap-2 text-gray-400 hover:text-blue-400 font-bold transition-colors w-fit"
+                    className="flex items-center gap-2 text-text-muted hover:text-blue-400 font-bold transition-colors w-fit"
                   >
                     <ArrowLeft className="w-5 h-5" /> Back to Dashboard
                   </button>
                   <div className="flex items-center gap-3">
-                    <button className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+                    <button className="px-4 py-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-border-main rounded-xl text-sm font-bold transition-all flex items-center gap-2 text-text-main">
                       <Bookmark className="w-4 h-4" /> Save Report
                     </button>
                     <button 
@@ -1029,7 +934,7 @@ function MainApp() {
 
                 {/* Summary Hero */}
                 <div className={cn(
-                  "relative overflow-hidden p-8 md:p-12 rounded-4xl border-2 flex flex-col md:flex-row items-center gap-10 shadow-2xl",
+                  "relative overflow-hidden p-8 md:p-12 rounded-[2rem] border-2 flex flex-col md:flex-row items-center gap-10 shadow-2xl",
                   result.severity.toLowerCase().includes('high') ? "bg-red-500/10 border-red-500/30 text-red-500" :
                   result.severity.toLowerCase().includes('medium') ? "bg-orange-500/10 border-orange-500/30 text-orange-500" :
                   "bg-green-500/10 border-green-500/30 text-green-500"
@@ -1037,7 +942,7 @@ function MainApp() {
                   {/* Background Decoration */}
                   <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-96 h-96 bg-current opacity-[0.03] rounded-full blur-3xl pointer-events-none"></div>
                   
-                  <div className="relative z-10 p-8 bg-white/10 rounded-3xl backdrop-blur-sm border border-white/10 shrink-0">
+                  <div className="relative z-10 p-8 bg-black/10 dark:bg-white/10 rounded-3xl backdrop-blur-sm border border-border-main shrink-0">
                     <ShieldAlert className="w-16 h-16" />
                   </div>
                   
@@ -1075,7 +980,7 @@ function MainApp() {
                               initial={{ opacity: 0, y: 20 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: i * 0.1 }}
-                              className="glass-card p-6 border-l-4 border-current hover:bg-white/5 transition-all group"
+                              className="glass-card p-6 border-l-4 border-current hover:bg-black/5 dark:hover:bg-white/5 transition-all group"
                               style={{ borderLeftColor: 
                                 inter.severity.toLowerCase().includes('high') ? '#EF4444' : 
                                 inter.severity.toLowerCase().includes('medium') ? '#F97316' : '#22C55E' 
@@ -1083,11 +988,11 @@ function MainApp() {
                             >
                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 font-bold text-gray-200">
+                                  <div className="px-4 py-2 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main font-bold text-text-main">
                                     {inter.drugA}
                                   </div>
-                                  <div className="w-8 h-0.5 bg-gray-800"></div>
-                                  <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 font-bold text-gray-200">
+                                  <div className="w-8 h-[2px] bg-border-main"></div>
+                                  <div className="px-4 py-2 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main font-bold text-text-main">
                                     {inter.drugB}
                                   </div>
                                 </div>
@@ -1100,7 +1005,7 @@ function MainApp() {
                                   {inter.severity} Severity
                                 </div>
                               </div>
-                              <p className="text-gray-400 leading-relaxed mb-4">
+                              <p className="text-text-muted leading-relaxed mb-4">
                                 {inter.description}
                               </p>
                               {inter.recommendation && (
@@ -1123,7 +1028,7 @@ function MainApp() {
                             <CheckCircle2 className="w-8 h-8 text-green-500" />
                           </div>
                           <h4 className="text-xl font-bold">No Direct Interactions Found</h4>
-                          <p className="text-gray-500 max-w-md mx-auto">Our database doesn't show any major direct interactions between these medications, but always consult with a professional.</p>
+                          <p className="text-text-muted max-w-md mx-auto">Our database doesn't show any major direct interactions between these medications, but always consult with a professional.</p>
                         </div>
                       )}
                     </section>
@@ -1131,7 +1036,7 @@ function MainApp() {
                     {/* Patient Population Contraindications */}
                     {result.patientContraindications && (
                       <section className="space-y-6">
-                        <h3 className="text-2xl font-bold flex items-center gap-3">
+                        <h3 className="text-2xl font-bold flex items-center gap-3 text-text-main">
                           <div className="w-2 h-8 bg-purple-500 rounded-full"></div>
                           Patient Population Contraindications
                         </h3>
@@ -1143,19 +1048,19 @@ function MainApp() {
                           ].map((pop, i) => (
                             <div key={i} className="glass-card p-6 space-y-4">
                               <div className="flex items-center gap-3">
-                                <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-white/5", pop.color)}>
+                                <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-black/5 dark:bg-white/5", pop.color)}>
                                   <pop.icon className="w-5 h-5" />
                                 </div>
-                                <h4 className="font-bold">{pop.title}</h4>
+                                <h4 className="font-bold text-text-main">{pop.title}</h4>
                               </div>
                               <ul className="space-y-2">
                                 {pop.data.length > 0 ? pop.data.map((item, idx) => (
-                                  <li key={idx} className="text-xs text-gray-400 flex gap-2">
+                                  <li key={idx} className="text-xs text-text-muted flex gap-2">
                                     <span className="text-blue-500 shrink-0">•</span>
                                     {item}
                                   </li>
                                 )) : (
-                                  <li className="text-xs text-gray-500 italic">No specific contraindications identified.</li>
+                                  <li className="text-xs text-text-muted italic">No specific contraindications identified.</li>
                                 )}
                               </ul>
                             </div>
@@ -1171,13 +1076,13 @@ function MainApp() {
                           <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center">
                             <AlertCircle className="w-6 h-6 text-orange-500" />
                           </div>
-                          <h3 className="text-xl font-bold">Side Effects</h3>
+                          <h3 className="text-xl font-bold text-text-main">Side Effects</h3>
                         </div>
                         <div className="space-y-3">
                           {result.sideEffects.map((effect, i) => (
-                            <div key={i} className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+                            <div key={i} className="flex items-start gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main">
                               <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-2 shrink-0" />
-                              <span className="text-sm text-gray-300 leading-relaxed">{effect}</span>
+                              <span className="text-sm text-text-muted leading-relaxed">{effect}</span>
                             </div>
                           ))}
                         </div>
@@ -1188,13 +1093,13 @@ function MainApp() {
                           <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
                             <ShieldAlert className="w-6 h-6 text-purple-500" />
                           </div>
-                          <h3 className="text-xl font-bold">Potential Risks</h3>
+                          <h3 className="text-xl font-bold text-text-main">Potential Risks</h3>
                         </div>
                         <div className="space-y-3">
                           {(result.problems || []).map((prob, i) => (
-                            <div key={i} className="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+                            <div key={i} className="flex items-start gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl border border-border-main">
                               <div className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-2 shrink-0" />
-                              <span className="text-sm text-gray-300 leading-relaxed">{prob}</span>
+                              <span className="text-sm text-text-muted leading-relaxed">{prob}</span>
                             </div>
                           ))}
                         </div>
@@ -1206,7 +1111,7 @@ function MainApp() {
                   <div className="lg:col-span-4 space-y-8">
                     {/* Critical Warnings */}
                     {result.alerts.length > 0 && (
-                      <section className="relative overflow-hidden bg-red-500/10 p-8 rounded-4xl border-2 border-red-500/30 space-y-6">
+                      <section className="relative overflow-hidden bg-red-500/10 p-8 rounded-[2rem] border-2 border-red-500/30 space-y-6">
                         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-64 h-64 bg-red-500 opacity-[0.05] rounded-full blur-3xl pointer-events-none"></div>
                         
                         <div className="flex items-center gap-3 relative z-10">
@@ -1229,7 +1134,7 @@ function MainApp() {
                     )}
 
                     {/* Safer Alternatives */}
-                    <section className="bg-blue-600 p-8 rounded-4xl text-white shadow-2xl shadow-blue-500/20 space-y-6 relative overflow-hidden">
+                    <section className="bg-blue-600 p-8 rounded-[2rem] text-white shadow-2xl shadow-blue-500/20 space-y-6 relative overflow-hidden">
                       <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-white opacity-[0.1] rounded-full blur-3xl pointer-events-none"></div>
                       
                       <div className="flex items-center gap-3 relative z-10">
@@ -1254,8 +1159,8 @@ function MainApp() {
 
                     {/* Disclaimer */}
                     <div className="p-6 bg-gray-900/50 rounded-2xl border border-gray-800 text-center">
-                      <Info className="w-5 h-5 text-gray-500 mx-auto mb-3" />
-                      <p className="text-[10px] text-gray-500 leading-relaxed uppercase tracking-widest font-bold">
+                      <Info className="w-5 h-5 text-text-muted mx-auto mb-3" />
+                      <p className="text-[10px] text-text-muted leading-relaxed uppercase tracking-widest font-bold">
                         Medical Disclaimer: This analysis is for informational purposes only and does not constitute medical advice. Always consult with a licensed healthcare professional.
                       </p>
                     </div>

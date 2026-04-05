@@ -1,33 +1,54 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-dark: #0A0E1A;
-  --color-sidebar-dark: #111827;
-  --color-card-dark: #161B2E;
-  --color-border-dark: #1F2937;
+  --color-bg-main: var(--bg-main);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-card: var(--bg-card);
+  --color-border-main: var(--border-main);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  
   --color-accent-blue: #3B82F6;
   --color-accent-teal: #14B8A6;
   --color-accent-purple: #8B5CF6;
 }
 
+:root {
+  --bg-main: #0A0E1A;
+  --bg-sidebar: #111827;
+  --bg-card: #161B2E;
+  --border-main: #1F2937;
+  --text-main: #F3F4F6;
+  --text-muted: #9CA3AF;
+}
+
+.light {
+  --bg-main: #F3F4F6;
+  --bg-sidebar: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --border-main: #E5E7EB;
+  --text-main: #111827;
+  --text-muted: #4B5563;
+}
+
 @layer base {
   body {
-    @apply bg-bg-dark text-gray-100 antialiased;
+    @apply bg-bg-main text-text-main antialiased transition-colors duration-300;
     font-family: 'Inter', system-ui, sans-serif;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-card-dark border border-border-dark rounded-2xl;
+    @apply bg-bg-card border border-border-main rounded-2xl shadow-sm;
   }
   
   .sidebar-item {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-all cursor-pointer;
   }
   
   .sidebar-item.active {
-    @apply text-white bg-white/10;
+    @apply text-text-main bg-black/10 dark:bg-white/10;
   }
 
   .glow-button {

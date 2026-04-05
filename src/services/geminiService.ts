@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { InteractionResult, Severity } from "../types";
 
 // The API key is injected by the platform into process.env.GEMINI_API_KEY
@@ -17,14 +17,20 @@ export async function analyzeInteractions(drugs: string[]): Promise<InteractionR
     };
   }
 
-  const prompt = `Perform a comprehensive clinical analysis of potential drug-to-drug interactions between these medications: ${drugs.join(", ")}. 
+  const systemInstruction = `You are a world-class clinical pharmacist and drug interaction specialist. 
+  Perform a comprehensive clinical analysis of potential drug-to-drug interactions.
+  
+  CRITICAL: You MUST analyze EVERY unique pair of the provided medications. 
+  IMPORTANT: Use the EXACT medication names as provided in the list. Do not shorten or modify them in the "drugA" and "drugB" fields of the "interactions" array.
+  
+  For example, if drugs A, B, and C are provided, you must evaluate the unique interactions for: (A,B), (A,C), and (B,C). You do not need to repeat pairs in reverse order (e.g., no need for B,A if A,B is analyzed).
   
   PRIORITY: Identify and highlight interactions with the highest potential for severe clinical outcomes (e.g., life-threatening events, permanent disability, hospitalization).
   
   The analysis must include:
   1. Overall Severity: Categorize the highest risk as "High", "Medium", or "Low" (or "None" if no interactions).
   2. Clinical Description: A professional summary of the pharmacological mechanisms and clinical significance.
-  3. Interaction Pairs: For each pair, specify (drugA, drugB, severity, description, recommendation).
+  3. Interaction Pairs: For EVERY unique pair, specify (drugA, drugB, severity, description, recommendation). The "description" MUST be a clear medical explanation of the interaction, including pharmacological mechanisms if applicable. If no interaction exists for a pair, set severity to "None" and provide a brief clinical confirmation that no significant interaction is expected.
   4. Side Effects: Common and rare adverse effects arising from the combination.
   5. Medical Risks: Specific physiological risks (e.g., QT prolongation, serotonin syndrome, bleeding risk).
   6. Safer Alternatives: Suggest alternative medications that avoid high-risk interactions.
@@ -37,11 +43,16 @@ export async function analyzeInteractions(drugs: string[]): Promise<InteractionR
   This analysis should be based on global clinical standards and apply to all medications available worldwide.
   Return the response in structured JSON format.`;
 
+  const userPrompt = `Analyze these medications: ${drugs.join(", ")}. 
+  Please provide interaction details for the following unique pairs: ${drugs.flatMap((d1, i) => drugs.slice(i + 1).map(d2 => `(${d1}, ${d2})`)).join(", ")}.`;
+
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
+      model: "gemini-3.1-flash-lite-preview",
+      contents: userPrompt,
       config: {
+        systemInstruction,
+        thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
