@@ -1,4 +1,4 @@
-# 💊 Glacier Rx
+# 💊 Clinical Rx
 
 > **AI-Powered Clinical Drug Interaction Analyzer** — Severity · Interaction Pairs · Side Effects · Patient Contraindications · Critical Alerts · Safer Alternatives for any drug combination
 
@@ -36,9 +36,9 @@
 
 ## 🌟 Overview
 
-**Glacier Rx** is a full-stack clinical drug interaction analyzer that combines **three independent intelligence sources** to deliver comprehensive, real-time pharmacological analysis for any combination of medications, supplements, or substances.
+**Clinical Rx** is a full-stack clinical drug interaction analyzer that combines **three independent intelligence sources** to deliver comprehensive, real-time pharmacological analysis for any combination of medications, supplements, or substances.
 
-Unlike static databases that only cover pre-catalogued pairs, Glacier Rx uses the **Google Gemini AI API** to reason about any combination — including trios, multi-drug regimens, and interactions involving foods or supplements. A built-in **Express backend** with a 16-drug clinical knowledge base handles fast offline lookups for known pairs. Both analyses run **in parallel via `Promise.all`**, and results are merged, fuzzy-matched, and severity-sorted before rendering.
+Unlike static databases that only cover pre-catalogued pairs, Clinical Rx uses the **Google Gemini AI API** to reason about any combination — including trios, multi-drug regimens, and interactions involving foods or supplements. A built-in **Express backend** with a 16-drug clinical knowledge base handles fast offline lookups for known pairs. Both analyses run **in parallel via `Promise.all`**, and results are merged, fuzzy-matched, and severity-sorted before rendering.
 
 Every analysis is automatically saved — to **Firestore** for signed-in users or to **localStorage** for guests — so history is never lost regardless of auth state.
 
@@ -187,8 +187,8 @@ Theme state initializes from `localStorage` on first load. A `useEffect` applies
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/your-username/glacier-rx.git
-cd glacier-rx
+git clone https://github.com/your-username/Clinical-rx.git
+cd Clinical-rx
 ```
 
 **2. Install dependencies**
@@ -396,7 +396,7 @@ Exports the entire history list as a `.csv` file with four columns: Date, Drugs,
 
 > **⚠️ Important**
 >
-> Glacier Rx is intended for **educational and informational purposes only.**
+> Clinical Rx is intended for **educational and informational purposes only.**
 >
 > - This tool does **NOT** replace professional medical advice, diagnosis, or treatment.
 > - Always consult a licensed pharmacist or physician before making any medication decisions.
@@ -434,4 +434,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 ---
 
-<p align="center"> Build By Nausheen Ara ⚕️ &nbsp;•&nbsp; Glacier Rx v2.0.0</p>
+<p align="center"> Build By Nausheen Ara ⚕️ &nbsp;•&nbsp; Clinical Rx v2.0.0</p>
