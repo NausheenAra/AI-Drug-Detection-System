@@ -434,4 +434,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 ---
 
-<p align="center"> Build By Nausheen Ara &nbsp;•&nbsp; Glacier Rx v2.0.0</p>
+<p align="center"> Build By Nausheen Ara ⚕️ &nbsp;•&nbsp; Glacier Rx v2.0.0</p>
